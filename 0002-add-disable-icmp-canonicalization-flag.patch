@@ -1,0 +1,23 @@
+--- a/llvm/lib/Transforms/InstCombine/InstCombineCompares.cpp
++++ b/llvm/lib/Transforms/InstCombine/InstCombineCompares.cpp
+@@ -20,6 +20,11 @@
+ #include "llvm/Support/KnownBits.h"
+ #include "llvm/Transforms/InstCombine/InstCombineWorklist.h"
+ 
++static cl::opt<bool> DisableICmpCanonicalization(
++    "disable-icmp-canonicalization",
++    cl::desc("Disable canonicalization of >= to > in integer comparisons"),
++    cl::Hidden, cl::init(false));
++
+ using namespace llvm;
+ using namespace PatternMatch;
+ 
+@@ -4557,6 +4562,9 @@
+ static ICmpInst *canonicalizeCmpWithConstant(ICmpInst &I) {
+   ICmpInst::Predicate Pred = I.getPredicate();
++  if (DisableICmpCanonicalization)
++    return nullptr;
++
+   if (Pred != ICmpInst::ICMP_SLE && Pred != ICmpInst::ICMP_SGE &&
+       Pred != ICmpInst::ICMP_ULE && Pred != ICmpInst::ICMP_UGE)
+     return nullptr;

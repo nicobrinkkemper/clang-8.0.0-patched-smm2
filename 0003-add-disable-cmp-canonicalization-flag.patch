@@ -1,0 +1,39 @@
+diff --git a/llvm/lib/CodeGen/SelectionDAG/TargetLowering.cpp b/llvm/lib/CodeGen/SelectionDAG/TargetLowering.cpp
+index a2f05c1e3..5dd0a1896 100644
+--- a/llvm/lib/CodeGen/SelectionDAG/TargetLowering.cpp
++++ b/llvm/lib/CodeGen/SelectionDAG/TargetLowering.cpp
+@@ -34,8 +34,16 @@
+ #include "llvm/Target/TargetLoweringObjectFile.h"
+ #include "llvm/Target/TargetMachine.h"
+ #include <cctype>
++#include "llvm/Support/CommandLine.h"
+ using namespace llvm;
+ 
++static llvm::cl::opt<bool> DisableCmpCanonicalization(
++    "disable-cmp-canonicalization",
++    llvm::cl::desc("Disable GE/LE to GT/LT comparison canonicalization in SelectionDAG"),
++    llvm::cl::init(false), llvm::cl::Hidden);
++
++
++
+ /// NOTE: The TargetMachine owns TLOF.
+ TargetLowering::TargetLowering(const TargetMachine &tm)
+   : TargetLoweringBase(tm) {}
+@@ -2619,7 +2627,7 @@ SDValue TargetLowering::SimplifySetCC(EVT VT, SDValue N0, SDValue N1,
+     }
+ 
+     // Canonicalize GE/LE comparisons to use GT/LT comparisons.
+-    if (Cond == ISD::SETGE || Cond == ISD::SETUGE) {
++    if (!DisableCmpCanonicalization && (Cond == ISD::SETGE || Cond == ISD::SETUGE)) {
+       // X >= MIN --> true
+       if (C1 == MinVal)
+         return DAG.getBoolConstant(true, dl, VT, OpVT);
+@@ -2639,7 +2647,7 @@ SDValue TargetLowering::SimplifySetCC(EVT VT, SDValue N0, SDValue N1,
+       }
+     }
+ 
+-    if (Cond == ISD::SETLE || Cond == ISD::SETULE) {
++    if (!DisableCmpCanonicalization && (Cond == ISD::SETLE || Cond == ISD::SETULE)) {
+       // X <= MAX --> true
+       if (C1 == MaxVal)
+         return DAG.getBoolConstant(true, dl, VT, OpVT);

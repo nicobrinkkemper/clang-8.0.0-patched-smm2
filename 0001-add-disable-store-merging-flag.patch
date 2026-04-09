@@ -1,0 +1,23 @@
+--- a/llvm/lib/CodeGen/SelectionDAG/DAGCombiner.cpp
++++ b/llvm/lib/CodeGen/SelectionDAG/DAGCombiner.cpp
+@@ -109,6 +109,11 @@
+                    cl::Hidden,
+                    cl::init(1024));
+ 
++  static cl::opt<bool> DisableStoreMerging("disable-store-merging",
++    cl::desc("Disable merging of consecutive stores in DAGCombiner"),
++    cl::Hidden,
++    cl::init(false));
++
+   //------------------------------ DAGCombiner ---------------------------------//
+ 
+   class DAGCombiner {
+@@ -14525,6 +14530,9 @@
+   if (OptLevel == CodeGenOpt::None)
+     return false;
+ 
++  if (DisableStoreMerging)
++    return false;
++
+   EVT MemVT = St->getMemoryVT();
+   int64_t ElementSizeBytes = MemVT.getStoreSize();
