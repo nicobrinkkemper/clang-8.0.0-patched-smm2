@@ -1,0 +1,35 @@
+Subject: Backport ascending offsets within one stack object
+
+Ordering portion of upstream LLVM commit:
+97ca7c2cc9083ebde681b0e11f7a8ccae1966d64 (Jay Foad, 2019-12-11)
+https://github.com/llvm/llvm-project/commit/97ca7c2cc9083ebde681b0e11f7a8ccae1966d64
+https://reviews.llvm.org/D71334
+
+Keep offsets within the same frame index in ascending address order.
+The AArch64 clustering assertion must describe that same invariant.
+Ordering across frame indices and register-based accesses is unchanged.
+This deliberately excludes the upstream commit's separate fixed-stack-object
+scaling changes. Applies from the LLVM 8 monorepo root with patch -p1.
+
+--- a/llvm/lib/CodeGen/MachineScheduler.cpp
++++ b/llvm/lib/CodeGen/MachineScheduler.cpp
+@@ -1511,7 +1511,7 @@
+                                 : BaseOp->getIndex() < RHS.BaseOp->getIndex();
+ 
+         if (Offset != RHS.Offset)
+-          return StackGrowsDown ? Offset > RHS.Offset : Offset < RHS.Offset;
++          return Offset < RHS.Offset;
+ 
+         return SU->NodeNum < RHS.SU->NodeNum;
+       }
+--- a/llvm/lib/Target/AArch64/AArch64InstrInfo.cpp
++++ b/llvm/lib/Target/AArch64/AArch64InstrInfo.cpp
+@@ -2231,7 +2231,7 @@
+   // The caller should already have ordered First/SecondLdSt by offset.
+   // Note: except for non-equal frame index bases
+   if (BaseOp1.isFI()) {
+-    assert((!BaseOp1.isIdenticalTo(BaseOp2) || Offset1 >= Offset2) &&
++    assert((!BaseOp1.isIdenticalTo(BaseOp2) || Offset1 <= Offset2) &&
+            "Caller should have ordered offsets.");
+ 
+     const MachineFrameInfo &MFI =

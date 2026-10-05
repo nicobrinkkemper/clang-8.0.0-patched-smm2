@@ -1,0 +1,22 @@
+diff --git a/llvm/lib/Target/AArch64/AArch64FrameLowering.cpp b/llvm/lib/Target/AArch64/AArch64FrameLowering.cpp
+index 57f630a18..0502943f4 100644
+--- a/llvm/lib/Target/AArch64/AArch64FrameLowering.cpp
++++ b/llvm/lib/Target/AArch64/AArch64FrameLowering.cpp
+@@ -1932,6 +1932,17 @@ bool AArch64FrameLowering::restoreCalleeSavedRegisters(
+         MachineMemOperand::MOLoad, Size, Align));
+     if (NeedsWinCFI)
+       InsertSEH(MIB, TII, MachineInstr::FrameDestroy);
++      
++    // Nintendo custom patch: hoist CSR restore before instruction if independent
++    if (MBB.begin() != MI) {
++      MachineBasicBlock::iterator Prev = std::prev(MI);
++      while (Prev != MBB.begin() && !Prev->isTerminator() && !Prev->mayStore() && !Prev->mayLoad() && !Prev->hasUnmodeledSideEffects()) {
++        if (Prev->readsRegister(Reg1, TRI) || (RPI.isPaired() && Prev->readsRegister(Reg2, TRI)))
++          break;
++        Prev = std::prev(Prev);
++      }
++      MBB.splice(std::next(Prev), &MBB, MIB);
++    }
+   };
+   if (ReverseCSRRestoreSeq)
+     for (const RegPairInfo &RPI : reverse(RegPairs))

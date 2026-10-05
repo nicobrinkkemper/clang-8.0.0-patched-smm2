@@ -1,18 +1,19 @@
+diff --git a/llvm/lib/CodeGen/SelectionDAG/DAGCombiner.cpp b/llvm/lib/CodeGen/SelectionDAG/DAGCombiner.cpp
+index 6af01423c..2ab39356f 100644
 --- a/llvm/lib/CodeGen/SelectionDAG/DAGCombiner.cpp
 +++ b/llvm/lib/CodeGen/SelectionDAG/DAGCombiner.cpp
-@@ -109,6 +109,11 @@
-                    cl::Hidden,
-                    cl::init(1024));
+@@ -112,6 +112,10 @@ static cl::opt<bool>
+   MaySplitLoadIndex("combiner-split-load-index", cl::Hidden, cl::init(true),
+                     cl::desc("DAG combiner may split indexing from loads"));
  
-+  static cl::opt<bool> DisableStoreMerging("disable-store-merging",
-+    cl::desc("Disable merging of consecutive stores in DAGCombiner"),
-+    cl::Hidden,
-+    cl::init(false));
 +
-   //------------------------------ DAGCombiner ---------------------------------//
++static cl::opt<bool>
++  DisableStoreMerging("disable-store-merging", cl::Hidden, cl::init(false),
++                      cl::desc("Disable merging of consecutive stores in DAGCombiner"));
+ namespace {
  
    class DAGCombiner {
-@@ -14525,6 +14530,9 @@
+@@ -14526,6 +14530,9 @@ bool DAGCombiner::MergeConsecutiveStores(StoreSDNode *St) {
    if (OptLevel == CodeGenOpt::None)
      return false;
  
@@ -21,3 +22,4 @@
 +
    EVT MemVT = St->getMemoryVT();
    int64_t ElementSizeBytes = MemVT.getStoreSize();
+   unsigned NumMemElts = MemVT.isVector() ? MemVT.getVectorNumElements() : 1;
