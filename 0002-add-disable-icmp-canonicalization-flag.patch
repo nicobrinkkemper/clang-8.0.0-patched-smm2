@@ -1,23 +1,66 @@
+diff --git a/llvm/lib/Transforms/InstCombine/InstCombineCompares.cpp b/llvm/lib/Transforms/InstCombine/InstCombineCompares.cpp
+index b5bbb0993..fa4bb40bc 100644
 --- a/llvm/lib/Transforms/InstCombine/InstCombineCompares.cpp
 +++ b/llvm/lib/Transforms/InstCombine/InstCombineCompares.cpp
-@@ -20,6 +20,11 @@
+@@ -26,6 +26,12 @@
+ #include "llvm/Support/Debug.h"
  #include "llvm/Support/KnownBits.h"
- #include "llvm/Transforms/InstCombine/InstCombineWorklist.h"
  
-+static cl::opt<bool> DisableICmpCanonicalization(
-+    "disable-icmp-canonicalization",
-+    cl::desc("Disable canonicalization of >= to > in integer comparisons"),
-+    cl::Hidden, cl::init(false));
++#include "llvm/Support/CommandLine.h"
 +
++static llvm::cl::opt<bool> DisableICmpCanonicalization(
++    "disable-icmp-canonicalization",
++    llvm::cl::desc("Disable canonicalization of >= to > in integer comparisons"),
++    llvm::cl::Hidden, llvm::cl::init(false));
  using namespace llvm;
  using namespace PatternMatch;
  
-@@ -4557,6 +4562,9 @@
+@@ -4504,7 +4510,8 @@ Instruction *InstCombiner::foldICmpUsingKnownBits(ICmpInst &I) {
+     break;
+   }
+   case ICmpInst::ICMP_SGE:
+-    assert(!isa<ConstantInt>(Op1) && "ICMP_SGE with ConstantInt not folded!");
++    assert((DisableICmpCanonicalization || !isa<ConstantInt>(Op1)) &&
++           "ICMP_SGE with ConstantInt not folded!");
+     if (Op0Min.sge(Op1Max)) // A >=s B -> true if min(A) >= max(B)
+       return replaceInstUsesWith(I, ConstantInt::getTrue(I.getType()));
+     if (Op0Max.slt(Op1Min)) // A >=s B -> false if max(A) < min(B)
+@@ -4513,7 +4519,8 @@ Instruction *InstCombiner::foldICmpUsingKnownBits(ICmpInst &I) {
+       return new ICmpInst(ICmpInst::ICMP_EQ, Op0, Op1);
+     break;
+   case ICmpInst::ICMP_SLE:
+-    assert(!isa<ConstantInt>(Op1) && "ICMP_SLE with ConstantInt not folded!");
++    assert((DisableICmpCanonicalization || !isa<ConstantInt>(Op1)) &&
++           "ICMP_SLE with ConstantInt not folded!");
+     if (Op0Max.sle(Op1Min)) // A <=s B -> true if max(A) <= min(B)
+       return replaceInstUsesWith(I, ConstantInt::getTrue(I.getType()));
+     if (Op0Min.sgt(Op1Max)) // A <=s B -> false if min(A) > max(B)
+@@ -4522,7 +4528,8 @@ Instruction *InstCombiner::foldICmpUsingKnownBits(ICmpInst &I) {
+       return new ICmpInst(ICmpInst::ICMP_EQ, Op0, Op1);
+     break;
+   case ICmpInst::ICMP_UGE:
+-    assert(!isa<ConstantInt>(Op1) && "ICMP_UGE with ConstantInt not folded!");
++    assert((DisableICmpCanonicalization || !isa<ConstantInt>(Op1)) &&
++           "ICMP_UGE with ConstantInt not folded!");
+     if (Op0Min.uge(Op1Max)) // A >=u B -> true if min(A) >= max(B)
+       return replaceInstUsesWith(I, ConstantInt::getTrue(I.getType()));
+     if (Op0Max.ult(Op1Min)) // A >=u B -> false if max(A) < min(B)
+@@ -4531,7 +4537,8 @@ Instruction *InstCombiner::foldICmpUsingKnownBits(ICmpInst &I) {
+       return new ICmpInst(ICmpInst::ICMP_EQ, Op0, Op1);
+     break;
+   case ICmpInst::ICMP_ULE:
+-    assert(!isa<ConstantInt>(Op1) && "ICMP_ULE with ConstantInt not folded!");
++    assert((DisableICmpCanonicalization || !isa<ConstantInt>(Op1)) &&
++           "ICMP_ULE with ConstantInt not folded!");
+     if (Op0Max.ule(Op1Min)) // A <=u B -> true if max(A) <= min(B)
+       return replaceInstUsesWith(I, ConstantInt::getTrue(I.getType()));
+     if (Op0Min.ugt(Op1Max)) // A <=u B -> false if min(A) > max(B)
+@@ -4555,6 +4561,8 @@ Instruction *InstCombiner::foldICmpUsingKnownBits(ICmpInst &I) {
+ /// it into the appropriate icmp lt or icmp gt instruction. This transform
+ /// allows them to be folded in visitICmpInst.
  static ICmpInst *canonicalizeCmpWithConstant(ICmpInst &I) {
-   ICmpInst::Predicate Pred = I.getPredicate();
 +  if (DisableICmpCanonicalization)
 +    return nullptr;
-+
+   ICmpInst::Predicate Pred = I.getPredicate();
    if (Pred != ICmpInst::ICMP_SLE && Pred != ICmpInst::ICMP_SGE &&
        Pred != ICmpInst::ICMP_ULE && Pred != ICmpInst::ICMP_UGE)
-     return nullptr;

@@ -1,44 +1,75 @@
-# Custom Clang 8.0.0 Compiler
+# SMM2 Clang 8.0.0
 
-To achieve 100% byte-matching on Nintendo Switch binaries, we use a custom-patched version of Clang 8.0.0. Nintendo's internal fork of Clang 8 included custom modifications to Loop Strength Reduction and disabled certain optimizations (like store merging and instruction canonicalization) that the vanilla Clang 8 release does not support disabling out of the box.
+This repository builds the versioned compiler used by
+[smm2-decomp](https://github.com/nicobrinkkemper/smm2-decomp).
+The game uses one common compiler configuration for every translation unit.
 
-## Patches
+## Build
 
-1. `0001-add-disable-store-merging-flag.patch`
-   Adds `-mllvm -disable-store-merging` to prevent DAGCombiner from merging adjacent zero stores into NEON instructions.
-2. `0002-add-disable-icmp-canonicalization-flag.patch`
-   Adds `-mllvm -disable-icmp-canonicalization` to prevent LLVM from aggressive ICMP reordering.
-3. `0003-add-disable-cmp-canonicalization-flag.patch`
-   Adds `-mllvm -disable-cmp-canonicalization` to prevent generic CMP reordering.
+On Ubuntu 24.04 x86_64, install Git, CMake, Ninja, host Clang/Clang++, Python 3.12,
+patch, GNU binutils and xz-utils. Then run:
 
-## Build Process
+    python3 build.py --work-dir /tmp/smm2-clang-build --jobs 4
 
-To build the patched compiler from source on an Ubuntu system:
+The recipe fetches immutable LLVM 8.0.0 monorepo commit
+d2298e74235598f15594fe2c99bbac870a507c59 and builds Release Clang/LLD for AArch64
+with assertions enabled. Optional terminfo, XML, zlib and Z3 are disabled.
+Existing source checkouts and compiler installations are untouched.
 
-```bash
-# 1. Download LLVM 8.0.0 source
-wget https://github.com/llvm/llvm-project/releases/download/llvmorg-8.0.0/llvm-8.0.0.src.tar.xz
-wget https://github.com/llvm/llvm-project/releases/download/llvmorg-8.0.0/cfe-8.0.0.src.tar.xz
+To read pinned Git objects from an existing local LLVM repository:
 
-# 2. Extract and structure the source tree
-tar xf llvm-8.0.0.src.tar.xz
-tar xf cfe-8.0.0.src.tar.xz
-mv cfe-8.0.0.src llvm-8.0.0.src/tools/clang
+    python3 build.py --work-dir /tmp/smm2-clang-build \
+        --source-repo /path/to/llvm-project --jobs 4
 
-# 3. Apply custom patches
-cd llvm-8.0.0.src
-patch -p1 < ../tools/llvm-patches/0001-add-disable-store-merging-flag.patch
-patch -p1 < ../tools/llvm-patches/0002-add-disable-icmp-canonicalization-flag.patch
-patch -p1 < ../tools/llvm-patches/0003-add-disable-cmp-canonicalization-flag.patch
+This exports the pinned commit, never its working tree. Resume interrupted
+compilation with the same command. A different patch set needs a new work
+directory; --repackage preserves a previous package before creating another.
 
-# 4. Build the compiler
-mkdir build && cd build
-cmake .. -G Ninja \
-    -DCMAKE_BUILD_TYPE=Release \
-    -DLLVM_TARGETS_TO_BUILD="AArch64" \
-    -DLLVM_ENABLE_PROJECTS="clang" \
-    -DCMAKE_INSTALL_PREFIX=../../tools/clang-8.0.0-patched
-ninja install
-```
+The archive includes compiler/linker/inspection tools, resource headers,
+licenses and smm2-toolchain.json. The manifest records upstream and patch hashes,
+recipe hash, host, CMake settings, runtime libraries and binary fingerprints.
+The archive's .sha256 file pins its exact contents. Runtime compatibility is
+with Ubuntu 24.04 or compatible libraries; this recipe does not claim identical
+compiler archive bytes across different host toolchains.
 
-Once installed, ensure `cmake/aarch64-none-elf.cmake` points to the `clang-8.0.0-patched` directory and includes the new `-mllvm` flags.
+## Patches and provenance
+
+Patches 0001–0003 retain the switches for optional store-merging and comparison
+canonicalization changes. The game's normal build leaves store merging enabled.
+Patches 0001–0002 are rebased onto actual LLVM 8.0.0; comparison assertions honor
+the canonicalization switch. Patch 0004 retains the existing epilogue behavior
+of the locally validated project compiler.
+
+Patch 0005 backports only the same-stack-object offset ordering correction and
+matching AArch64 assertion from
+[LLVM commit 97ca7c2](https://github.com/llvm/llvm-project/commit/97ca7c2cc9083ebde681b0e11f7a8ccae1966d64)
+([D71334](https://reviews.llvm.org/D71334)).
+It sorts offsets within one stack object in increasing address order while
+preserving ordering across separate stack objects and register-based accesses.
+The upstream commit's separate fixed-stack-object scaling changes are excluded.
+Patch 0006 adds standard headers required by modern host compilers.
+
+These patches record a validated decompilation toolchain; they do not identify
+Nintendo's exact internal compiler revision.
+
+## Release validation
+
+Before publishing, rebuild all game translation units with identical source,
+flags and link order using both compiler versions. Compare named matching-label
+failures and the set of WIP functions that match, regenerating Viking's derived
+CSV independently each time. Run the affected behavior tests against the new
+image.
+
+The isolated ordering backport preserved all existing matches across 1,227
+translation units at smm2-decomp develop aaa7fc6f: the same 178 baseline failures,
+all 21 already matching WIP functions, plus a new exact 268-byte player bounce
+match. All 1,877 bounce, friction-request and speed-dispatch bridge tests passed.
+The release package must independently repeat that validation before use.
+
+
+The final comparison was repeated on develop b70faf0 with **1,260 translation
+units**. The clean package and normal installed compiler preserve all **25**
+existing WIP matches and the same **178** baseline failures, adding only the
+268-byte bounce match. The targeted official checks report OK for bounce and
+the 48-byte StateMachine constructor. The 1,877 request bridge cases and 11
+compiler installation/upgrade tests pass.
